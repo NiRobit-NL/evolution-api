@@ -1519,7 +1519,11 @@ export class BaileysStartupService extends ChannelStartupService {
           } = {
             remoteJid: received.key.remoteJid,
             pushName: received.key.fromMe ? '' : received.key.fromMe == null ? '' : received.pushName,
-            profilePicUrl: (await this.profilePicture(received.key.remoteJid)).profilePictureUrl,
+            // Voor lid-geadresseerde chats de foto via het PN-jid (remoteJidAlt)
+            // opvragen: de server beantwoordt picture-queries op een kaal @lid-jid
+            // niet, en een onbeantwoorde query kost de volledige query-timeout.
+            profilePicUrl: (await this.profilePicture(received.key.remoteJidAlt ?? received.key.remoteJid))
+              .profilePictureUrl,
             instanceId: this.instanceId,
           };
 
@@ -2064,7 +2068,13 @@ export class BaileysStartupService extends ChannelStartupService {
     const jid = createJid(number);
 
     try {
-      const profilePictureUrl = await this.client.profilePictureUrl(jid, 'image');
+      // Bounded timeout is essentieel: zonder timeoutMs wacht deze iq-query de
+      // volledige defaultQueryTimeoutMs (60s) wanneer de server niet antwoordt
+      // — wat structureel gebeurt voor @lid-jids (baileys rc13 addressing).
+      // Deze call zit o.a. in het pad van élk inkomend bericht (messages.upsert
+      // → contact-update); een onbegrensde wachttijd legt dan de hele
+      // berichtverwerking van de instance per bericht een minuut stil.
+      const profilePictureUrl = await this.client.profilePictureUrl(jid, 'image', 5_000);
 
       return { wuid: jid, profilePictureUrl };
     } catch {
