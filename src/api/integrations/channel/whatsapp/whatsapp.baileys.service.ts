@@ -154,6 +154,7 @@ import { PassThrough, Readable } from 'stream';
 import { v4 } from 'uuid';
 
 import { BaileysMessageProcessor } from './baileysMessage.processor';
+import { resolveProfilePictureUrl } from './profile-picture';
 import { useVoiceCallsBaileys } from './voiceCalls/useVoiceCallsBaileys';
 
 export interface ExtendedIMessageKey extends proto.IMessageKey {
@@ -2067,19 +2068,16 @@ export class BaileysStartupService extends ChannelStartupService {
   public async profilePicture(number: string) {
     const jid = createJid(number);
 
-    try {
-      // Bounded timeout is essentieel: zonder timeoutMs wacht deze iq-query de
-      // volledige defaultQueryTimeoutMs (60s) wanneer de server niet antwoordt
-      // — wat structureel gebeurt voor @lid-jids (baileys rc13 addressing).
-      // Deze call zit o.a. in het pad van élk inkomend bericht (messages.upsert
-      // → contact-update); een onbegrensde wachttijd legt dan de hele
-      // berichtverwerking van de instance per bericht een minuut stil.
-      const profilePictureUrl = await this.client.profilePictureUrl(jid, 'image', 5_000);
+    // Chat lists need the small preview avatar. It is available more often than
+    // the full image; both attempts still share the existing hard 5s budget so
+    // a profile query can never stall inbound processing twice.
+    const profilePictureUrl = await resolveProfilePictureUrl(
+      this.client.profilePictureUrl.bind(this.client),
+      jid,
+      5_000,
+    );
 
-      return { wuid: jid, profilePictureUrl };
-    } catch {
-      return { wuid: jid, profilePictureUrl: null };
-    }
+    return { wuid: jid, profilePictureUrl };
   }
 
   public async getStatus(number: string) {

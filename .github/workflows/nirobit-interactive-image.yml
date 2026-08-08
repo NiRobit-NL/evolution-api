@@ -24,11 +24,22 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      - name: Preserve current production image for rollback
+        shell: bash
+        run: |
+          rollback="ghcr.io/nirobit-nl/evolution-api:2.3.7-interactive-rollback-20260808"
+          current="ghcr.io/nirobit-nl/evolution-api:2.3.7-interactive"
+          if ! docker buildx imagetools inspect "$rollback" >/dev/null 2>&1; then
+            docker buildx imagetools create --tag "$rollback" "$current"
+          fi
+
       - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           platforms: linux/amd64
-          tags: ghcr.io/nirobit-nl/evolution-api:2.3.7-interactive
+          tags: |
+            ghcr.io/nirobit-nl/evolution-api:2.3.7-interactive
+            ghcr.io/nirobit-nl/evolution-api:sha-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
