@@ -1,4 +1,5 @@
 export type ProfilePictureUrlFetcher = (jid: string, type: 'preview' | 'image', timeoutMs: number) => Promise<string>;
+export type CachedProfilePictureUrlFetcher = (jid: string) => Promise<string | null>;
 
 /**
  * Resolve the small WhatsApp avatar first. The preview is what chat lists need
@@ -11,6 +12,7 @@ export async function resolveProfilePictureUrl(
   jid: string,
   timeoutMs = 5_000,
   now: () => number = Date.now,
+  fetchCachedUrl?: CachedProfilePictureUrlFetcher,
 ): Promise<string | null> {
   const startedAt = now();
 
@@ -22,10 +24,19 @@ export async function resolveProfilePictureUrl(
   }
 
   const remainingMs = timeoutMs - (now() - startedAt);
-  if (remainingMs <= 0) return null;
+  if (remainingMs > 0) {
+    try {
+      const imageUrl = await fetchUrl(jid, 'image', remainingMs);
+      if (imageUrl) return imageUrl;
+    } catch {
+      // The live WhatsApp query can fail for privacy or timeout reasons.
+    }
+  }
+
+  if (!fetchCachedUrl) return null;
 
   try {
-    return (await fetchUrl(jid, 'image', remainingMs)) || null;
+    return (await fetchCachedUrl(jid)) || null;
   } catch {
     return null;
   }

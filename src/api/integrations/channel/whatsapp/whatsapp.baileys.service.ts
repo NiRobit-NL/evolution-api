@@ -2075,6 +2075,20 @@ export class BaileysStartupService extends ChannelStartupService {
       this.client.profilePictureUrl.bind(this.client),
       jid,
       5_000,
+      Date.now,
+      async (cachedJid) => {
+        const cachedContact = await this.prismaRepository.contact.findUnique({
+          where: {
+            remoteJid_instanceId: {
+              remoteJid: cachedJid,
+              instanceId: this.instanceId,
+            },
+          },
+          select: { profilePicUrl: true },
+        });
+
+        return cachedContact?.profilePicUrl ?? null;
+      },
     );
 
     return { wuid: jid, profilePictureUrl };
